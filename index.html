@@ -1,0 +1,557 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Typing Speed Test</title>
+  <style>
+    /* ── Variables ── */
+    :root {
+      --bg:           #f9f7f4;
+      --surface:      #ffffff;
+      --border:       #e8e4de;
+      --text:         #1c1917;
+      --text-sub:     #78716c;
+      --text-muted:   #c4bfb8;
+      --accent:       #3b82f6;
+      --urgent:       #ef4444;
+      --correct:      #1c1917;
+      --incorrect:    #ef4444;
+      --incorrect-bg: rgba(239,68,68,.09);
+      --font-ui:   -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      --font-mono: 'Menlo', 'Monaco', 'Consolas', monospace;
+      --r: 14px;
+      --rs: 8px;
+    }
+
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: var(--font-ui);
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 1.5rem;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    .container { width: 100%; max-width: 780px; }
+
+    /* ── Header ── */
+    header { text-align: center; margin-bottom: 2rem; }
+
+    h1 {
+      font-size: 1.5rem;
+      font-weight: 700;
+      letter-spacing: -0.3px;
+    }
+
+    .subtitle {
+      font-size: .9rem;
+      color: var(--text-sub);
+      margin-top: .25rem;
+    }
+
+    /* ── Mode pills ── */
+    .modes {
+      display: flex;
+      justify-content: center;
+      gap: .5rem;
+      margin-bottom: 1.25rem;
+    }
+
+    .mode-btn {
+      font-family: var(--font-ui);
+      font-size: .85rem;
+      font-weight: 500;
+      color: var(--text-sub);
+      background: var(--surface);
+      border: 1.5px solid var(--border);
+      border-radius: 999px;
+      padding: .35rem 1.15rem;
+      cursor: pointer;
+    }
+
+    .mode-btn:hover:not(.active) { border-color: #a8a29e; color: var(--text); }
+
+    .mode-btn.active {
+      background: var(--text);
+      border-color: var(--text);
+      color: #fff;
+    }
+
+    /* ── Test card ── */
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--r);
+      padding: 2rem;
+    }
+
+    /* ── Instructions ── */
+    .instructions {
+      font-size: .875rem;
+      color: var(--text-sub);
+      text-align: center;
+      margin-bottom: 1.5rem;
+      line-height: 1.6;
+    }
+
+    kbd {
+      display: inline-block;
+      font-family: var(--font-mono);
+      font-size: .75rem;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-bottom-width: 2px;
+      border-radius: 4px;
+      padding: .1rem .45rem;
+      color: var(--text);
+      line-height: 1.5;
+    }
+
+    /* ── Stats bar ── */
+    .stats {
+      display: none;
+      justify-content: space-around;
+      align-items: center;
+      padding: .9rem 1rem;
+      background: var(--bg);
+      border-radius: var(--rs);
+      margin-bottom: 1.5rem;
+    }
+
+    .stats.on { display: flex; }
+
+    .stat { display: flex; flex-direction: column; align-items: center; gap: .15rem; }
+
+    .stat-val {
+      font-size: 1.75rem;
+      font-weight: 700;
+      font-variant-numeric: tabular-nums;
+      line-height: 1;
+    }
+
+    .stat-lbl {
+      font-size: .65rem;
+      font-weight: 500;
+      letter-spacing: .1em;
+      text-transform: uppercase;
+      color: var(--text-sub);
+    }
+
+    #timerStat .stat-val { color: var(--accent); }
+    #timerStat.urgent .stat-val { color: var(--urgent); }
+
+    /* ── Passage ── */
+    .passage-wrap { position: relative; cursor: text; }
+
+    .passage {
+      font-family: var(--font-mono);
+      font-size: 1.25rem;
+      line-height: 2;
+      color: var(--text-muted);
+      user-select: none;
+      -webkit-user-select: none;
+      pointer-events: none;
+      word-break: break-word;
+    }
+
+    .passage .c { position: relative; display: inline; }
+    .passage .c.ok  { color: var(--correct); }
+    .passage .c.err { color: var(--incorrect); background: var(--incorrect-bg); border-radius: 2px; }
+
+    /* Vertical-bar cursor */
+    .passage .c.cur::before {
+      content: '';
+      position: absolute;
+      left: -1px;
+      top: 16%;
+      height: 68%;
+      width: 2px;
+      background: var(--accent);
+      border-radius: 1px;
+      animation: blink 1.1s step-end infinite;
+    }
+
+    @keyframes blink { 0%,100%{opacity:1} 50%{opacity:0} }
+
+    /* Invisible input that captures keystrokes */
+    .hidden-input {
+      position: absolute;
+      inset: 0;
+      opacity: 0;
+      cursor: text;
+      font-size: 16px; /* stops iOS from zooming */
+      z-index: 1;
+      pointer-events: auto;
+    }
+
+    /* ── Focus hint ── */
+    .hint {
+      text-align: center;
+      font-size: .8rem;
+      color: var(--text-muted);
+      margin-top: 1.25rem;
+      pointer-events: none;
+    }
+
+    .hint.hide { display: none; }
+
+    /* ── Results ── */
+    .results {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--r);
+      padding: 2rem;
+      margin-top: 1rem;
+      text-align: center;
+    }
+
+    .results h2 {
+      font-size: 1.1rem;
+      font-weight: 700;
+      margin-bottom: 1.5rem;
+    }
+
+    .results-grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 1rem;
+      margin-bottom: 1.75rem;
+    }
+
+    .res-card {
+      background: var(--bg);
+      border-radius: var(--rs);
+      padding: 1.1rem .5rem;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: .3rem;
+    }
+
+    .res-val {
+      font-size: 2rem;
+      font-weight: 700;
+      font-variant-numeric: tabular-nums;
+      line-height: 1;
+    }
+
+    .res-lbl {
+      font-size: .65rem;
+      font-weight: 500;
+      letter-spacing: .1em;
+      text-transform: uppercase;
+      color: var(--text-sub);
+    }
+
+    /* ── Buttons ── */
+    .actions { display: flex; justify-content: center; gap: .75rem; margin-bottom: 1rem; }
+
+    .btn {
+      font-family: var(--font-ui);
+      font-size: .875rem;
+      font-weight: 500;
+      padding: .55rem 1.4rem;
+      border-radius: var(--rs);
+      cursor: pointer;
+      border: 1.5px solid transparent;
+    }
+
+    .btn-p { background: var(--text); color: #fff; border-color: var(--text); }
+    .btn-p:hover { background: #2c2925; }
+    .btn-s { background: transparent; color: var(--text); border-color: var(--border); }
+    .btn-s:hover { border-color: #a8a29e; }
+
+    .results-hint { font-size: .8rem; color: var(--text-muted); }
+
+    /* ── Responsive ── */
+    @media (max-width: 600px) {
+      body { align-items: flex-start; padding: 1rem; }
+      .card, .results { padding: 1.25rem; }
+      .passage { font-size: 1.1rem; }
+      .results-grid { grid-template-columns: repeat(2,1fr); }
+      .res-val { font-size: 1.75rem; }
+    }
+  </style>
+</head>
+<body>
+
+<div class="container">
+
+  <header>
+    <h1>Typing Speed Test</h1>
+    <p class="subtitle">Measure your words per minute</p>
+  </header>
+
+  <div class="modes" id="modes">
+    <button class="mode-btn" data-s="30">30s</button>
+    <button class="mode-btn active" data-s="60">60s</button>
+  </div>
+
+  <div class="card">
+    <p class="instructions" id="instr">
+      Click below or start typing — the timer begins with your first keystroke.
+      Press <kbd>Esc</kbd> to restart.
+    </p>
+
+    <div class="stats" id="stats" aria-live="polite">
+      <div class="stat">
+        <span class="stat-val" id="wpmLive">0</span>
+        <span class="stat-lbl">WPM</span>
+      </div>
+      <div class="stat" id="timerStat">
+        <span class="stat-val" id="timerVal">60</span>
+        <span class="stat-lbl">seconds left</span>
+      </div>
+      <div class="stat">
+        <span class="stat-val" id="accLive">100%</span>
+        <span class="stat-lbl">accuracy</span>
+      </div>
+    </div>
+
+    <div class="passage-wrap" id="wrap">
+      <div class="passage" id="passage" role="text" aria-label="Passage to type"></div>
+      <input id="inp" class="hidden-input" type="text"
+             autocomplete="off" autocorrect="off"
+             autocapitalize="off" spellcheck="false"
+             aria-hidden="true" tabindex="0" />
+    </div>
+
+    <p class="hint" id="hint">Click here to begin</p>
+  </div>
+
+  <div class="results" id="results" hidden>
+    <h2>Your results</h2>
+    <div class="results-grid">
+      <div class="res-card"><span class="res-val" id="rWpm">—</span><span class="res-lbl">WPM</span></div>
+      <div class="res-card"><span class="res-val" id="rAcc">—</span><span class="res-lbl">Accuracy</span></div>
+      <div class="res-card"><span class="res-val" id="rErr">—</span><span class="res-lbl">Errors</span></div>
+      <div class="res-card"><span class="res-val" id="rChr">—</span><span class="res-lbl">Correct chars</span></div>
+    </div>
+    <div class="actions">
+      <button class="btn btn-p" id="btnRestart">Try again</button>
+      <button class="btn btn-s" id="btnNew">New passage</button>
+    </div>
+    <p class="results-hint">Press <kbd>Tab</kbd> to try again instantly</p>
+  </div>
+
+</div>
+
+<script>
+/* ── Passages ── */
+const PASSAGES = [
+  "The secret of getting ahead is getting started. Break overwhelming tasks into manageable pieces and focus on consistent daily progress rather than seeking perfection all at once.",
+  "Good software is designed to be changed. Writing clean, readable code today saves hours of confusion tomorrow. Use clear names, keep functions small, and leave the codebase better than you found it.",
+  "Email security relies on three complementary protocols. SPF defines which servers may send mail for a domain. DKIM adds a digital signature to confirm the message was not altered in transit. DMARC ties both together.",
+  "Cloud computing changed how organisations manage infrastructure. Instead of buying servers and running a data centre, companies rent capacity from providers and scale instantly with demand.",
+  "Automation is not about replacing people. It frees them from repetitive tasks so they can focus on work that requires genuine judgement, creativity, and human empathy. The best workflows are the ones nobody needs to think about.",
+  "A service desk exists to restore normal operations as quickly as possible. Every ticket is a small promise to the user that their problem matters. Empathy, clarity, and follow-through separate a good analyst from a great one.",
+  "Python is designed to be readable above all else. Its syntax rewards clarity over cleverness. Write code your future self can understand at a glance, and always consider the next person who will maintain what you build.",
+  "Zero Trust security starts from the assumption that no user or device should be trusted by default. Every access request is verified, least privilege is enforced, and sessions are monitored continuously across the network.",
+  "Curiosity is the most valuable trait in technology. The field moves faster than any curriculum can keep up with. The professionals who thrive enjoy learning, ask good questions, and are comfortable not knowing the answer yet.",
+  "Documentation is a form of generosity. Writing clearly about how something works, why a decision was made, or how to recover from a failure costs time today but pays dividends for every person who works on the same system.",
+];
+
+/* ── State ── */
+let passage = '', passIdx = -1;
+let charIdx = 0, correct = 0, errors = 0;
+let startTime = null, ticker = null;
+let duration = 60, timeLeft = 60;
+let active = false, done = false;
+let states = []; // true=correct false=wrong null=untyped
+
+/* ── DOM ── */
+const passEl    = document.getElementById('passage');
+const inp       = document.getElementById('inp');
+const instrEl   = document.getElementById('instr');
+const statsEl   = document.getElementById('stats');
+const wpmEl     = document.getElementById('wpmLive');
+const timerEl   = document.getElementById('timerVal');
+const accEl     = document.getElementById('accLive');
+const timerStat = document.getElementById('timerStat');
+const hintEl    = document.getElementById('hint');
+const resultsEl = document.getElementById('results');
+const modesEl   = document.getElementById('modes');
+const rWpm      = document.getElementById('rWpm');
+const rAcc      = document.getElementById('rAcc');
+const rErr      = document.getElementById('rErr');
+const rChr      = document.getElementById('rChr');
+
+/* ── Init ── */
+function init(keep = false) {
+  if (!keep) {
+    let n;
+    do { n = Math.floor(Math.random() * PASSAGES.length); }
+    while (n === passIdx && PASSAGES.length > 1);
+    passIdx = n;
+  }
+  passage = PASSAGES[passIdx];
+
+  charIdx = 0; correct = 0; errors = 0;
+  startTime = null; timeLeft = duration;
+  active = false; done = false;
+  states = new Array(passage.length).fill(null);
+
+  clearInterval(ticker); ticker = null;
+
+  resultsEl.hidden = true;
+  instrEl.style.display = '';
+  modesEl.style.display = '';
+  statsEl.classList.remove('on');
+  timerStat.classList.remove('urgent');
+  timerEl.textContent = duration;
+  wpmEl.textContent = '0';
+  accEl.textContent = '100%';
+  hintEl.classList.remove('hide');
+  inp.value = '';
+
+  render();
+  inp.focus();
+}
+
+/* ── Render passage ── */
+function render() {
+  passEl.innerHTML = '';
+  for (let i = 0; i < passage.length; i++) {
+    const s = document.createElement('span');
+    s.className = 'c';
+    s.textContent = passage[i] === ' ' ? ' ' : passage[i];
+    passEl.appendChild(s);
+  }
+  paint();
+}
+
+function paint() {
+  const spans = passEl.querySelectorAll('.c');
+  spans.forEach((s, i) => {
+    s.classList.remove('ok', 'err', 'cur');
+    if (i < charIdx)             s.classList.add(states[i] ? 'ok' : 'err');
+    else if (i === charIdx&&!done) s.classList.add('cur');
+  });
+}
+
+/* ── Input ── */
+inp.addEventListener('keydown', e => {
+  if (done) return;
+  if (e.key === 'Backspace') { e.preventDefault(); back(); }
+});
+
+inp.addEventListener('input', () => {
+  if (done) { inp.value = ''; return; }
+  const t = inp.value;
+  if (!t.length) return;
+  for (const ch of t) {
+    if (charIdx < passage.length) type(ch);
+  }
+  inp.value = '';
+});
+
+function type(key) {
+  if (!active) begin();
+  const ok = key === passage[charIdx];
+  states[charIdx] = ok;
+  if (ok) correct++; else errors++;
+  charIdx++;
+  paint();
+  liveStats();
+  if (charIdx >= passage.length) end();
+}
+
+function back() {
+  if (!active || charIdx === 0) return;
+  charIdx--;
+  if (states[charIdx] === true) correct--;
+  states[charIdx] = null;
+  paint();
+  liveStats();
+}
+
+/* ── Begin ── */
+function begin() {
+  active = true;
+  startTime = Date.now();
+  instrEl.style.display = 'none';
+  modesEl.style.display = 'none';
+  hintEl.classList.add('hide');
+  statsEl.classList.add('on');
+  ticker = setInterval(tick, 200);
+}
+
+/* ── Tick ── */
+function tick() {
+  const elapsed = Math.floor((Date.now() - startTime) / 1000);
+  timeLeft = Math.max(0, duration - elapsed);
+  timerEl.textContent = timeLeft;
+  timerStat.classList.toggle('urgent', timeLeft <= 10);
+  liveStats();
+  if (timeLeft === 0) end();
+}
+
+/* ── Live stats ──
+   WPM   = correct chars / 5 / elapsed minutes  (net WPM, standard convention)
+   Acc % = correct chars / chars attempted × 100
+*/
+function liveStats() {
+  if (!startTime) return;
+  const mins = (Date.now() - startTime) / 60000;
+  if (mins <= 0) return;
+  wpmEl.textContent = Math.round(correct / 5 / mins);
+  const a = charIdx > 0 ? Math.round(correct / charIdx * 100) : 100;
+  accEl.textContent = a + '%';
+}
+
+/* ── End ── */
+function end() {
+  if (done) return;
+  done = true; active = false;
+  clearInterval(ticker);
+
+  const mins = (Date.now() - startTime) / 60000;
+  const wpm  = Math.round(correct / 5 / mins);
+  const acc  = charIdx > 0 ? Math.round(correct / charIdx * 100) : 100;
+
+  rWpm.textContent = wpm;
+  rAcc.textContent = acc + '%';
+  rErr.textContent = errors;
+  rChr.textContent = correct;
+
+  passEl.querySelector('.cur')?.classList.remove('cur');
+  resultsEl.hidden = false;
+  resultsEl.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+}
+
+/* ── Mode buttons ── */
+document.querySelectorAll('.mode-btn').forEach(b => {
+  b.addEventListener('click', () => {
+    document.querySelectorAll('.mode-btn').forEach(x => x.classList.remove('active'));
+    b.classList.add('active');
+    duration = parseInt(b.dataset.s);
+    init(true);
+  });
+});
+
+/* ── Focus ── */
+document.getElementById('wrap').addEventListener('click', () => inp.focus());
+inp.addEventListener('focus', () => hintEl.classList.add('hide'));
+inp.addEventListener('blur',  () => { if (!active && !done) hintEl.classList.remove('hide'); });
+
+/* ── Restart ── */
+document.getElementById('btnRestart').addEventListener('click', () => init(true));
+document.getElementById('btnNew').addEventListener('click',     () => init(false));
+
+/* ── Keyboard shortcuts ── */
+document.addEventListener('keydown', e => {
+  if (e.key === 'Tab' && done)          { e.preventDefault(); init(true); }
+  if (e.key === 'Escape' && (active||done)) { e.preventDefault(); init(true); }
+});
+
+/* ── Go ── */
+init();
+</script>
+</body>
+</html>
